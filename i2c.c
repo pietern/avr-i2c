@@ -114,22 +114,19 @@ void i2c_post(i2c_txn_t *t) {
 }
 
 ISR(TWI_vect, ISR_BLOCK) {
-  uint8_t status;
-
-  /* Grab the relevant bits from the status register. */
-  status = TWSR & (_BV(TWS7) | _BV(TWS6) | _BV(TWS5) | _BV(TWS4) | _BV(TWS3));
+  uint8_t status = TW_STATUS;
 
   /* This interrupt should only fire if there is something to do. */
   assert(op != NULL);
 
-  if ((op->address & _BV(0)) == I2C_RD) {
+  if ((op->address & _BV(0)) == TW_READ) {
     /* Master Receiver mode. */
     switch (status) {
 
     /* A START condition has been transmitted. */
-    case 0x08:
+    case TW_START:
     /* A repeated START condition has been transmitted. */
-    case 0x10:
+    case TW_REP_START:
       assert(op->buflen > 0);
       op->bufpos = 0;
       TWDR = op->address;
@@ -137,13 +134,13 @@ ISR(TWI_vect, ISR_BLOCK) {
       break;
 
     /* Arbitration lost in SLA+R or NOT ACK bit. */
-    case 0x38:
+    case TW_MR_ARB_LOST:
       /* A START condition will be transmitted when the bus becomes free. */
       TWCR = TWCR_DEFAULT | _BV(TWINT) | _BV(TWSTA);
       break;
 
     /* SLA+R has been transmitted; ACK has been received. */
-    case 0x40:
+    case TW_MR_SLA_ACK:
       if (op->buflen == 1) {
         TWCR = TWCR_NOT_ACK;
       } else {
@@ -152,12 +149,12 @@ ISR(TWI_vect, ISR_BLOCK) {
       break;
 
     /* SLA+R has been transmitted; NOT ACK has been received. */
-    case 0x48:
+    case TW_MR_SLA_NACK:
       txn->flags = I2C_TXN_DONE | I2C_TXN_ERR;
       goto next_txn;
 
     /* Data byte has been received; ACK has been returned. */
-    case 0x50:
+    case TW_MR_DATA_ACK:
       op->buf[op->bufpos++] = TWDR;
       if (op->bufpos+1 == op->buflen) {
         TWCR = TWCR_NOT_ACK;
@@ -167,7 +164,7 @@ ISR(TWI_vect, ISR_BLOCK) {
       break;
 
     /* Data byte has been received; NOT ACK has been returned. */
-    case 0x58:
+    case TW_MR_DATA_NACK:
       op->buf[op->bufpos++] = TWDR;
       goto next_op;
 
@@ -179,9 +176,9 @@ ISR(TWI_vect, ISR_BLOCK) {
     switch (status) {
 
     /* A START condition has been transmitted. */
-    case 0x08:
+    case TW_START:
     /* A repeated START condition has been transmitted. */
-    case 0x10:
+    case TW_REP_START:
       assert(op->buflen > 0);
       op->bufpos = 0;
       TWDR = op->address;
@@ -189,24 +186,24 @@ ISR(TWI_vect, ISR_BLOCK) {
       break;
 
     /* Arbitration lost in SLA+W or data bytes. */
-    case 0x38:
+    case TW_MT_ARB_LOST:
       /* A START condition will be transmitted when the bus becomes free. */
       TWCR = TWCR_DEFAULT | _BV(TWINT) | _BV(TWSTA);
       break;
 
     /* SLA+W has been transmitted; ACK has been received. */
-    case 0x18:
+    case TW_MT_SLA_ACK:
       TWDR = op->buf[op->bufpos++];
       TWCR = TWCR_DEFAULT | _BV(TWINT);
       break;
 
     /* SLA+W has been transmitted; NOT ACK has been received. */
-    case 0x20:
+    case TW_MT_SLA_NACK:
       txn->flags = I2C_TXN_DONE | I2C_TXN_ERR;
       goto next_txn;
 
     /* Data byte has been transmitted; ACK has been received. */
-    case 0x28:
+    case TW_MT_DATA_ACK:
       if (op->bufpos < op->buflen) {
         TWDR = op->buf[op->bufpos++];
         TWCR = TWCR_DEFAULT | _BV(TWINT);
@@ -217,7 +214,7 @@ ISR(TWI_vect, ISR_BLOCK) {
       goto next_op;
 
     /* Data byte has been transmitted; NOT ACK has been received. */
-    case 0x30:
+    case TW_MT_DATA_NACK:
       if (op->bufpos < op->buflen) {
         /* There were more bytes left to transmit! */
         txn->flags = I2C_TXN_DONE | I2C_TXN_ERR;

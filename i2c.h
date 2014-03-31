@@ -27,10 +27,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-
-/* This library only takes care of master modes. */
-#define I2C_RD 1
-#define I2C_WR 0
+#include <util/twi.h>
 
 /* 100kHz */
 #define I2C_FREQ 100000
@@ -64,11 +61,11 @@ static inline void i2c_op_init(i2c_op_t *o, uint8_t address, uint8_t *buf, uint8
 }
 
 static inline void i2c_op_init_rd(i2c_op_t *o, uint8_t address, uint8_t *buf, uint8_t buflen) {
-  i2c_op_init(o, (address << 1) | I2C_RD, buf, buflen);
+  i2c_op_init(o, (address << 1) | TW_READ, buf, buflen);
 }
 
 static inline void i2c_op_init_wr(i2c_op_t *o, uint8_t address, uint8_t *buf, uint8_t buflen) {
-  i2c_op_init(o, (address << 1) | I2C_WR, buf, buflen);
+  i2c_op_init(o, (address << 1) | TW_WRITE, buf, buflen);
 }
 
 static inline void i2c_txn_init(i2c_txn_t *t, uint8_t opslen) {
